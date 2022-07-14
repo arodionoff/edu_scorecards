@@ -6,11 +6,25 @@
 
 ![Рисунок. Разновидности **скоринговых карт** на разных этапах кредитного процесса](images/ScoreCards.png)
 
-Обзор материалов на языке программирования на **R** представлен в работе Gero Szepannek. [_An Overview on the Landscape of R Packages for Open Source Scorecard Modelling_](https://www.mdpi.com/2227-9091/10/3/67).
+Обзор инструментов на языке программирования на **R** для _создания скоринговых карт_ представлен в работе Gero Szepannek. [_An Overview on the Landscape of R Packages for Open Source Scorecard Modelling_](https://www.mdpi.com/2227-9091/10/3/67).
+
+Автор выделяет в этой работы пять основных этапов:
+
+1. Дискретизация (англ. Binning) и весомость (англ. Weights of Evidence) переменных
+
+2. Предварительный отбор переменных (англ. Preselection of Variables)
+
+3. Многомерное моделирование (англ. Multivariate Modelling)
+
+4. Оценка эффективности (англ. Performance Evaluation) модели
+
+5. Анализ отказов (англ. Reject Inference)
+
+Последний из них пока не часто встречается в исследованиях. Поэтому разберем основные пакеты, покрывающие первые четыре этапа.
 
 ### Пакеты используемые для построения кредитных скоринговых карт на языке программирования R
 
-На 2022 год существует несколько пакетов для построения кредитных скоринговых карт на языке программирования R с высоким уровнем цитирования и большим числом загрузок.
+На 2022 год существует несколько пакетов, помогающие в построении кредитных скоринговых карт на языке программирования R с высоким уровнем цитирования и большим числом загрузок.
 
 Их можно разделить на две группы по тому какой класс предикторов применятся для построения: 
 
@@ -18,7 +32,7 @@
 
 * уровни [непрерывных числовых признаков (англ. Continuous variable)](https://en.wikipedia.org/wiki/Continuous_or_discrete_variable#Continuous_variable).
 
-### В **первую группу**, использующие предикторы, преобразованные в **факторы**, входят:
+### В <u>первую группу</u>, использующие предикторы, преобразованные в _факторы_, входят:
 
 1. Самый популярный пакет [**`smbinning`: Scoring Modeling and Optimal Binning**](http://cran.rstudio.com/web/packages/smbinning) ![cran version](https://www.r-pkg.org/badges/version/smbinning) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/smbinning)  ![last month's downloads](http://cranlogs.r-pkg.org/badges/smbinning), созданный чилийцем **Herman Jopia**.
 
@@ -30,7 +44,7 @@
 
 * Anderson R. [(2007, ISBN: 9780199226405)](https://www.amazon.com/Credit-Scoring-Toolkit-Management-Automation/dp/0199226407) _The Credit Scoring Toolkit: Theory and Practice for Retail Credit Risk Management and Decision Automation_.
 
-* Finlay S. [(2010. ISBN: )](https://www.amazon.com/Credit-Scoring-Response-Modeling-Insurance-ebook/dp/B008RWZFKI) _Credit Scoring, Response Modeling, and Insurance Rating_.
+* Finlay S. [(2010. ISBN: 9780230347762)](https://www.amazon.com/Credit-Scoring-Response-Modeling-Insurance-ebook/dp/B008RWZFKI) _Credit Scoring, Response Modeling, and Insurance Rating_.
 
 2. Пакет для преобразования данных и построения скоринговых карт [**`Rprofet`: WOE Transformation and Scorecard Builder**](http://cran.rstudio.com/web/packages/Rprofet) ![cran version](https://www.r-pkg.org/badges/version/Rprofet) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/Rprofet)  ![last month's downloads](http://cranlogs.r-pkg.org/badges/Rprofet), разработанный командой Государственного Университета Южной Дакоты, под руководством **Thomas Brandenburger**.
   
@@ -38,7 +52,7 @@
 
 * Siddiqi, N. [(2006, ISBN: 9780471754510)](https://www.amazon.com/Intelligent-Credit-Scoring-Implementing-Scorecards/dp/1119279151). _Credit risk scorecards. Developing and Implementing Intelligent Credit Scoring_.
   
-### **Вторая группа** с применение уровней непрерывных переменных, которая не дает явного представления для бизнес-заказчиков, содержит:
+### <u>Вторая группа</u> с применение уровней непрерывных переменных, основанных на _их весомости_, которая не дает очевидного представления в терминах самих переменных для бизнес-заказчиков, содержит:
 
 2. Пакет для построения кредитных скоринговых карт [**`scorecard`: Credit Risk Scorecard**](http://cran.rstudio.com/web/packages/scorecard) ![cran version](https://www.r-pkg.org/badges/version/scorecard) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/scorecard) ![last month's downloads](http://cranlogs.r-pkg.org/badges/scorecard), разработанный китайцем  **Shichen Xie**.
 
