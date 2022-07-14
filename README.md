@@ -2,21 +2,21 @@
 
 ## Назначение Репозитория
 
+Данный репозиторий посвящен теме создания классических **Кредитных скоринговых карт** на основе **Логистической регрессии** при помощи пакетов на языке программирования [**R**](https://www.r-project.org).
+
 ![Рисунок. Разновидности **скоринговых карт** на разных этапах кредитного процесса](images/ScoreCards.png)
 
-Данный репозиторий посвящен теме создания классических Кредитных скоринговых карт на основе **Логистической регрессии** при помощи пакетов на языке программирования [**R**](https://www.r-project.org).
-
-## Пакеты используемые для построения кредитных скоринговых карт на языке программирования R
+### Пакеты используемые для построения кредитных скоринговых карт на языке программирования R
 
 На 2022 год существует несколько пакетов для построения кредитных скоринговых карт на языке программирования R с высоким уровнем цитирования и большим числом загрузок.
 
 Их можно разделить на две группы по тому какой класс предикторов применятся для построения: 
 
-* факторы в терминалогии **R**, т.е. (номинальные или качественные признаки, англ. categorical variables)[https://ru.wikipedia.org/wiki/%D0%9A%D0%B0%D1%87%D0%B5%D1%81%D1%82%D0%B2%D0%B5%D0%BD%D0%BD%D0%B0%D1%8F_%D0%BF%D0%B5%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D0%BD%D0%B0%D1%8F], что дает лучшее пониманию бизнеса процесса построения модели;
+* факторы в терминалогии **R**, т.е. [(номинальные или качественные признаки, англ. categorical variables)](https://ru.wikipedia.org/wiki/%D0%9A%D0%B0%D1%87%D0%B5%D1%81%D1%82%D0%B2%D0%B5%D0%BD%D0%BD%D0%B0%D1%8F_%D0%BF%D0%B5%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D0%BD%D0%B0%D1%8F), что дает лучшее пониманию бизнеса процесса построения модели;
 
-* уровни непрерывных числовых признаков (англ. Continuous variable)[https://en.wikipedia.org/wiki/Continuous_or_discrete_variable#Continuous_variable].
+* уровни [непрерывных числовых признаков (англ. Continuous variable)](https://en.wikipedia.org/wiki/Continuous_or_discrete_variable#Continuous_variable).
 
-В **первую группу**, использующие преобразованные **факторы** входит:
+### В **первую группу**, использующие предикторы, преобразованные в **факторы**, входят:
 
 1. Самый популярный пакет [**`smbinning`: Scoring Modeling and Optimal Binning**](http://cran.rstudio.com/web/packages/smbinning) ![cran version](https://www.r-pkg.org/badges/version/smbinning) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/smbinning)  ![last month's downloads](http://cranlogs.r-pkg.org/badges/smbinning), созданный чилийцем **Herman Jopia**.
 
@@ -32,13 +32,11 @@
 
 2. Пакет для преобразования данных и построения скоринговых карт [**`Rprofet`: WOE Transformation and Scorecard Builder**](http://cran.rstudio.com/web/packages/Rprofet) ![cran version](https://www.r-pkg.org/badges/version/Rprofet) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/Rprofet)  ![last month's downloads](http://cranlogs.r-pkg.org/badges/Rprofet), разработанный командой Государственного Университета Южной Дакоты, под руководством **Thomas Brandenburger**.
   
-> Performs all steps in the credit scoring process. This package allows the user to follow all the necessary steps for building an effective scorecard. It provides the user functions for coarse binning of variables, Weights of Evidence (WOE) transformation, variable clustering, custom binning, visualization, and scaling of logistic regression coefficients. The results will generate a scorecard that can be used as an effective credit scoring tool to evaluate risk. For complete details on the credit scoring process, see Siddiqi (2005, ISBN:047175451X)
+> Performs all steps in the credit scoring process. This package allows the user to follow all the necessary steps for building an effective scorecard. It provides the user functions for coarse binning of variables, Weights of Evidence (WOE) transformation, variable clustering, custom binning, visualization, and scaling of logistic regression coefficients. The results will generate a scorecard that can be used as an effective credit scoring tool to evaluate risk. For complete details on the credit scoring process, see:
 
-**ВтораЯ группа** с применение уровней непрерывных переменных, которая не дает явного представления для бизнес-заказчиков, содержит:
-
-1. Интерактивный построитель кредитных скоринговых карт [**`scorecardbuilder`**](https://github.com/anindyamozumdar/scorecardbuilder), созданный индусом **Anindya Mozumdar** в 2019 г., победитель [Первого конкурса контента для Shiny](https://blog.rstudio.com/2019/04/05/first-shiny-contest-winners).
-
-> This application is a Web-based interface to develop credit risk scorecards. It is a fairly basic application but works for simple use cases. It supports: Data Upload, Exploratory Data Analysis, Sampling, Binning (Weight of Evidence and Information Value calculation), Scorecard Development and Alignment and Scorecard Validation
+* Siddiqi, N. [(2006, ISBN: 9780471754510)](https://www.amazon.com/Intelligent-Credit-Scoring-Implementing-Scorecards/dp/1119279151). _Credit risk scorecards. Developing and Implementing Intelligent Credit Scoring_.
+  
+### **Вторая группа** с применение уровней непрерывных переменных, которая не дает явного представления для бизнес-заказчиков, содержит:
 
 2. Пакет для построения кредитных скоринговых карт [**`scorecard`: Credit Risk Scorecard**](http://cran.rstudio.com/web/packages/scorecard) ![cran version](https://www.r-pkg.org/badges/version/scorecard) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/scorecard) ![last month's downloads](http://cranlogs.r-pkg.org/badges/scorecard), разработанный китайцем  **Shichen Xie**.
 
@@ -58,3 +56,6 @@
 
 > The package can be used with single variables or an entire data frame. It provides  flexible tools for exploring different binning solutions and for deploying them to(new) data.
 
+1. Интерактивный построитель кредитных скоринговых карт [**`scorecardbuilder`**](https://github.com/anindyamozumdar/scorecardbuilder), созданный индусом **Anindya Mozumdar** в 2019 г., победитель [Первого конкурса контента для Shiny](https://blog.rstudio.com/2019/04/05/first-shiny-contest-winners).
+
+> This application is a Web-based interface to develop credit risk scorecards. It is a fairly basic application but works for simple use cases. It supports: Data Upload, Exploratory Data Analysis, Sampling, Binning (Weight of Evidence and Information Value calculation), Scorecard Development and Alignment and Scorecard Validation
