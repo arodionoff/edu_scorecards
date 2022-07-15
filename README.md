@@ -8,23 +8,25 @@
 
 Обзор инструментов на языке программирования на **R** для _создания скоринговых карт_ представлен в работе Gero Szepannek. [_An Overview on the Landscape of R Packages for Open Source Scorecard Modelling_](https://www.mdpi.com/2227-9091/10/3/67).
 
-Автор выделяет в этой работы пять основных этапов:
+Автор выделяет в этой работы пять основных этапов, но мы считаем, что <u>надлежит</u> выделять шесть:
 
-1. Дискретизация (англ. Binning) и весомость (англ. Weights of Evidence) переменных
+1. Дискретизация (англ. Binning) и расчет весомости (англ. Weights of Evidence) переменных
 
 2. Предварительный отбор переменных (англ. Preselection of Variables)
 
-3. Многомерное моделирование (англ. Multivariate Modelling)
+3. Многомерное моделирование (англ. Multivariate Modelling) на предикторах
 
-4. Оценка эффективности (англ. Performance Evaluation) модели
+4. Построение скоринговой карты (англ. Scorecard Development) по модели
 
-5. Анализ отказов (англ. Reject Inference)
+5. Оценка эффективности (англ. Performance Evaluation) модели
 
-Последний из них пока не часто встречается в исследованиях. Поэтому разберем основные пакеты, покрывающие первые четыре этапа.
+6. Анализ отказов (англ. Reject Inference)
+
+Последний из них пока редко встречается в исследованиях. Поэтому разберем основные пакеты, покрывающие **первые пять этапов**.
 
 ### Пакеты используемые для построения кредитных скоринговых карт на языке программирования R
 
-На 2022 год существует несколько пакетов, помогающие в построении кредитных скоринговых карт на языке программирования R с высоким уровнем цитирования и большим числом загрузок.
+На 2022 год существует несколько пакетов существенно помогающие в построении кредитных скоринговых карт на языке программирования **R**. Отметим те из них, что отличаются высоким уровнем цитирования и большим числом загрузок.
 
 Их можно разделить на две группы по тому какой класс предикторов применятся для построения: 
 
@@ -54,7 +56,7 @@
   
 ### <u>Вторая группа</u> с применение уровней непрерывных переменных, основанных на _их весомости_, которая не дает очевидного представления в терминах самих переменных для бизнес-заказчиков, содержит:
 
-2. Пакет для построения кредитных скоринговых карт [**`scorecard`: Credit Risk Scorecard**](http://cran.rstudio.com/web/packages/scorecard) ![cran version](https://www.r-pkg.org/badges/version/scorecard) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/scorecard) ![last month's downloads](http://cranlogs.r-pkg.org/badges/scorecard), разработанный китайцем  **Shichen Xie**.
+1. Пакет для построения кредитных скоринговых карт [**`scorecard`: Credit Risk Scorecard**](http://cran.rstudio.com/web/packages/scorecard) ![cran version](https://www.r-pkg.org/badges/version/scorecard) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/scorecard) ![last month's downloads](http://cranlogs.r-pkg.org/badges/scorecard), разработанный китайцем  **Shichen Xie**.
 
 > The `scorecard` package makes the development of credit risk scorecard easier and efficient by providing functions for some common tasks, such as data partition, variable selection, woe binning, scorecard scaling, performance evaluation and report generation. These functions can also used in the development of machine learning models.
     The references including: 
@@ -63,7 +65,7 @@
   
 * Siddiqi, N. [(2006, ISBN: 9780471754510)](https://www.amazon.com/Intelligent-Credit-Scoring-Implementing-Scorecards/dp/1119279151). _Credit risk scorecards. Developing and Implementing Intelligent Credit Scoring_.
   
-3. Пакет для дискретизации или квантования (англ. [Binning](https://en.wikipedia.org/wiki/Data_binning)) номинальных и числовых переменных [**`woeBinning`: Supervised Weight of Evidence Binning of Numeric Variables and Factors**](http://cran.rstudio.com/web/packages/woeBinning) ![cran version](https://www.r-pkg.org/badges/version/woeBinning) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/woeBinning) ![last month's downloads](http://cranlogs.r-pkg.org/badges/woeBinning), разработанный немцем  **Thilo Eichenberg**.
+2. Пакет для дискретизации или квантования (англ. [Binning](https://en.wikipedia.org/wiki/Data_binning)) номинальных и числовых переменных [**`woeBinning`: Supervised Weight of Evidence Binning of Numeric Variables and Factors**](http://cran.rstudio.com/web/packages/woeBinning) ![cran version](https://www.r-pkg.org/badges/version/woeBinning) ![grand total downloads](http://cranlogs.r-pkg.org/badges/grand-total/woeBinning) ![last month's downloads](http://cranlogs.r-pkg.org/badges/woeBinning), разработанный немцем  **Thilo Eichenberg**.
 
 > Implements an automated binning of numeric variables and factors with respect to a dichotomous target variable.
  
@@ -72,6 +74,6 @@
 
 > The package can be used with single variables or an entire data frame. It provides  flexible tools for exploring different binning solutions and for deploying them to(new) data.
 
-1. Интерактивный построитель кредитных скоринговых карт [**`scorecardbuilder`**](https://github.com/anindyamozumdar/scorecardbuilder), созданный индусом **Anindya Mozumdar** в 2019 г., победитель [Первого конкурса контента для Shiny](https://blog.rstudio.com/2019/04/05/first-shiny-contest-winners).
+3. Интерактивный построитель кредитных скоринговых карт [**`scorecardbuilder`**](https://github.com/anindyamozumdar/scorecardbuilder), созданный индусом **Anindya Mozumdar** в 2019 г., победитель [Первого конкурса контента для Shiny](https://blog.rstudio.com/2019/04/05/first-shiny-contest-winners).
 
 > This application is a Web-based interface to develop credit risk scorecards. It is a fairly basic application but works for simple use cases. It supports: Data Upload, Exploratory Data Analysis, Sampling, Binning (Weight of Evidence and Information Value calculation), Scorecard Development and Alignment and Scorecard Validation

@@ -1,0 +1,332 @@
+---
+title: "Пример построения классической скоринговой карты"
+subtitle: "Построение скоринговой карты при помощи пакетов {sbinning}"
+description: |
+  1. Дискретизация (англ. Binning) и расчет весомости (англ. Weights of Evidence) переменных.
+  2. Предварительный отбор переменных (англ. Preselection of Variables).
+  3. Многомерное моделирование (англ. Multivariate Modelling) на предикторах.
+  4. Построение скоринговой карты (англ. Scorecard Development) по модели.
+  5. Оценка эффективности (англ. Performance Evaluation) модели.
+author: "Alexander Rodionov"
+date: "`r format(Sys.Date(), '%d-%m-%Y')`"
+date_start: "12 July 2022"
+params:
+  date: !r as.Date("2005-04-01")
+  Has_Code_folding:
+    label: "Тип вывода кода программы:"
+    value: show
+    input: radio
+    choices: [none, hide, show]
+output:
+  rmdformats::robobook:
+    code_folding: show
+    code_download: yes
+    number_sections: yes
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+## Global options
+
+knitr::opts_chunk$set(
+  echo = ifelse(params$Has_Code_folding != 'none', TRUE, FALSE),
+  cache = FALSE,
+  dev='svg',
+  results = 'markup',
+  # collapse = TRUE,   # see https://www.jumpingrivers.com/blog/knitr-default-options-settings-hooks/
+  comment = '#>',
+  R.options = list(width = 120),
+  fig.width = 15, fig.height = 10 / 1.6180, # Golden Ratio
+  # fig.asp = 0.7,
+  fig.pos = "t",  # Top of pages - pdf mode
+  fig.align = 'center',
+  out.width = '100%'
+)
+
+```
+
+# Этапы построения скоринговой карты при помощи логистической регрессии  {.block}
+
+1. Дискретизация (англ. Binning) и расчет весомости (англ. Weights of Evidence) переменных.
+
+2. Предварительный отбор переменных (англ. Preselection of Variables).
+
+3. Многомерное моделирование (англ. Multivariate Modelling) на предикторах.
+
+4. Построение скоринговой карты (англ. Scorecard Development) по модели.
+
+5. Оценка эффективности (англ. Performance Evaluation) модели.
+
+# Ход построения скоринговой модели
+
+## Этап первый: Дискретизация и расчет весомости переменных
+
+Прежде всего надо подгрузить требуемые пакеты (библиотеки), а также загрузить сами данные для моделирования.
+
+### Подгрузка пакетов
+
+Мы используем ограниченный набор пакетов.
+
+```{r Library}
+
+# library('data.table')       # Extension of `data.frame`
+library('dplyr')            # A Grammar of Data Manipulation 
+library('ggplot2')          # Create Elegant Data Visualisations Using the Grammar of Graphics
+library('tibble')           # Simple Data Frames
+library('tidyr')            # Tidy Messy Data 
+library('lubridate')        # Dates and times made easy with lubridate
+library('knitr')            # A General-Purpose Package for Dynamic Report Generation in R
+library('magrittr')         # A Forward-Pipe Operator for R
+library('smbinning')        # Scoring Modeling and Optimal Binning
+
+library('progressr')        # An Inclusive, Unifying API for Progress Updates
+
+
+```
+
+Зачастую пакеты надо подгружать в нужном порядке, поскольку в ряде случаев одноименные функции могут перекрываться. Но лучше всего применять нотацию с явным указанием пакета и вызываемой из нее функции, например, `stats::setdiff()`.
+
+### Загрузка данных
+
+Данные для моделирования взяты из открытых источников:
+
+#### chileancredit
+
+**chileancredit** - данные из пакета {`smbinning`} о дефолтах у клиентов чилийских банков. Наиболее полный набор содержится в папке `data` в [версии 0.4](https://cran.r-project.org/src/contrib/Archive/smbinning/smbinning_0.4.tar.gz) от [_2017-10-22_](https://cran.microsoft.com/snapshot/2017-10-23/web/packages/smbinning/index.html):
+
+**Описание набора данных**
+
+A loan dataset where the target variable is FlagGB, which represents the binary status of default (**0**) and not default (**1**) after 12 months.
+
+**Формат таблицы**
+
+Data frame with 18,718 rows and 28 columns.
+
+**Описание переменных**
+
+  * LnCntRel: Number of owners.
+  * LnTOB: Time on books (months) since open.
+  * LnAutopay: Type of payment.
+  * CuScore1: Credit score 1.
+  * CuScore2: Credit score 2.
+  * CuScore3: Credit score 3.
+  * CuDpBal: Current amount of deposits.
+  * CuFlagSvCD: Number of savings and CDs.
+  * CuLnUnCnt: Number of unsecured loans.
+  * CuLnScCnt: Number of secured loans.
+  * CuMgCnt: Number of Mortgages.
+  * CuTOB: Time on books (months) since first account.
+  * CuDpTOB: Time on books (months) since first deposit account.
+  * CuDpPct12M: Growth of deposits (Percentage) in the last 12 months.
+  * CuDpDiff12M: Growth of deposits (Amount) in the last 12 months.
+  * CuPOSCntAvg12M: Average number of purchases in the last 12 months.
+  * CuPOSAmtAvg12M: Average amount of purchases in the last 12 months.
+  * CuPOSFq12M: Frequency of purchases in the last 12 months.
+  * CuDpAvgBal12M: Average amount of deposits in the last 12 months.
+  * CuDDCntAvg12M: Average number of electronic deposits in the last 12 months.
+  * CuDDAmtAvg12M: Average amount of electronic in the last 12 months.
+  * CuDDFq12M: Frequency of electronic deposits in the last 12 months.
+  * CuWealth: Income level.
+  * CuODRecency: Most recent overdraft.
+  * CuODCnt12M: Average number of overdrafts in the last 12 months.
+  * CuODFq12M: Frequency of overdrafts in the last 12 months.
+  * **FlagGB**: Default indicator where 0 means default.
+  * Rnd: Random number to select testing and training samples.
+
+#### UCI_Credit_Card
+
+**UCI_Credit_Card** - данные из репозитория [UCI Machine Learning](https://archive.ics.uci.edu/ml/datasets/default+of+credit+card+clients). Irvine, CA: University of California, School of Information and Computer Science. Набор сдержит сведения о дефолтах по кредитным картам клиентов тайваньских банков:
+
+**Описание набора данных**
+
+A dataset contains information on default payments, demographic factors, credit data, history of payment, and bill statements of credit card clients in Taiwan from April 2005 to September 2005.
+
+**Формат таблицы**
+
+Data frame with 30,000 rows and 25 columns.
+
+**Описание переменных**
+
+  *  ID: ID of each client
+  *  LIMIT_BAL: Amount of given credit in NT dollars (includes individual and family/supplementary credit
+  *  SEX: Gender (1=male, 2=female)
+  *  EDUCATION: (1=graduate school, 2=university, 3=high school, 4=others, 5=unknown, 6=unknown)
+  *  MARRIAGE: Marital status (1=married, 2=single, 3=others)
+  *  AGE: Age in years
+  *  PAY_0: Repayment status in September, 2005 (-1=pay duly, 1=payment delay for one month, 2=payment delay for two months, … 8=payment delay for eight months, 9=payment delay for nine months and above)
+  *  PAY_2: Repayment status in August, 2005 (scale same as above)
+  *  PAY_3: Repayment status in July, 2005 (scale same as above)
+  *  PAY_4: Repayment status in June, 2005 (scale same as above)
+  *  PAY_5: Repayment status in May, 2005 (scale same as above)
+  *  PAY_6: Repayment status in April, 2005 (scale same as above)
+  *  BILL_AMT1: Amount of bill statement in September, 2005 (NT dollar)
+  *  BILL_AMT2: Amount of bill statement in August, 2005 (NT dollar)
+  *  BILL_AMT3: Amount of bill statement in July, 2005 (NT dollar)
+  *  BILL_AMT4: Amount of bill statement in June, 2005 (NT dollar)
+  *  BILL_AMT5: Amount of bill statement in May, 2005 (NT dollar)
+  *  BILL_AMT6: Amount of bill statement in April, 2005 (NT dollar)
+  *  PAY_AMT1: Amount of previous payment in September, 2005 (NT dollar)
+  *  PAY_AMT2: Amount of previous payment in August, 2005 (NT dollar)
+  *  PAY_AMT3: Amount of previous payment in July, 2005 (NT dollar)
+  *  PAY_AMT4: Amount of previous payment in June, 2005 (NT dollar)
+  *  PAY_AMT5: Amount of previous payment in May, 2005 (NT dollar)
+  *  PAY_AMT6: Amount of previous payment in April, 2005 (NT dollar)
+  *  **GB_flag**: Default payment (1=yes, 0=no)
+
+```{r Load datasets}
+# Load datasets
+
+load("data/chileancredit.RData")
+load("data/UCI_Credit_Card.Rdata")
+
+DF <- # UCI_Credit_Card
+  chileancredit %>%
+    dplyr::filter(FlagGB == 1 | FlagGB == 0) %>% 
+    dplyr::mutate(period = params$date %m+% months( ceiling(Rnd * 0.6 * 10 - 1) )) %>% 
+    dplyr::rename(GB_flag = FlagGB)
+
+```
+
+В набор данных `chileancredit` лишь добавлено поле указывающее на месяц выдачи займов для последующего анализа стабильности популяций, а сама искомая переменная переменована в `GB_flag`.
+
+В наборе библиотек `tidyverse` имеется пакет {`readr`} способный читать и сохранять табличные данные, как непосредственно в текстовом виде, так и в заахивированном формате, например, `readr::write_csv(df, file = 'df.csv.bz2')` в весьма плотный и быстрый формат [bzip2](https://ru.wikipedia.org/wiki/Bzip2).
+
+### Разделение набора данных на 
+
+### Дискретизация числовых переменных и группировка градаций номинальных переменных (факторов)
+
+Переход к дискретным значениям числовых переменных и сокращение в ходе группировки градаций номинальных переменных, именуемых в R факторами решает ряд важных вопросов:
+
+1) Устраняет пропущенные значения
+
+2) Сокращает излишную вариабельность признаков
+
+3) Уменьшает влияние мультиколлериарности признаков, которая погубно воздействует на регрессионную модель.
+
+В результате получается все числовые переменные будут преобразованы в набор номинальных признаков с небольшим числом нередкосных градаций.
+
+### Разделение набора данных на подвыборки
+
+Для начала разделим набор данных на **три** подвыборках: обучающей (`train`), проверочной (`test`) и позднее сформировавшейся контрольной (`valid`).
+
+```{r Split into Sets}
+
+# Names Of Datasets for Train and Test tasks
+NamesOfDatasets <- c( 'train', 'test'   # Базовые выборки: обучающая и проверочная
+                    , 'valid'           # Самая крайняя (ближняя к современности) по времени КОНТРОЛЬНАЯ выборка
+                    )
+
+# Create a list of 70% of the rows in the original dataset we can use for training
+seed <- 2022
+set.seed(seed = seed, kind = "L'Ecuyer-CMRG")
+
+Valid_index <- 
+  DF %>% 
+    dplyr::mutate(row_id = dplyr::row_number()) %>% 
+    dplyr::filter(period >= '2005-09-01') %>% 
+    dplyr::pull(row_id)
+
+Train_index = sample(
+    x       = base::setdiff(c(1:nrow(DF)), Valid_index),
+    size    = (nrow(DF) - length(Valid_index)) * 0.70,
+    replace = FALSE
+  )
+
+split <- list(
+# Indices train set
+    train_index = Train_index
+# Indices test set
+  , test_index  = base::setdiff( base::setdiff(c(1:nrow(DF)), Valid_index), Train_index )
+# Indices valid set for a last period (after Validation_Date)
+  , valid_index = Valid_index
+) 
+
+remove(Train_index, Valid_index)
+
+```
+
+Таким образом сформировано три подвыборки, на одной из которых будет проведено обучение, на второй проверка модели, а на третьей, самом последней по времени, её контрольная валидация.
+
+```{r}
+
+```
+
+# Code style {.tabset}
+
+## Graph {.active}
+
+Since `style` is `TRUE`, this difficult-to-read code (look at the `.Rmd` source file) will be restyled according to the Tidyverse style guide when it's rendered. Whitespace rationing is not in effect!
+
+```{r, cars-plot, fig.width=6, fig.height=3, dev='svg', out.width='100%', fig.cap='Figure Caption.', echo=FALSE}
+par(mar = c(4, 4, .1, .1), las = 1)
+boxplot(
+  Sepal.Length ~ Species, data = iris, horizontal = TRUE,
+  col = c('limegreen', 'steelblue', 'coral'), notch = TRUE
+)
+```
+
+## Chunks in languages other than R
+
+Remember: knitr supports many other languages than R, so you can reprex bits of code in Python, Ruby, Julia, C++, SQL, and more. Note that, in many cases, this still requires that you have the relevant external interpreter installed.
+
+And bash!
+
+```{bash, eval = Sys.which("bash") != ""}
+echo "Hello Bash!";
+pwd;
+ls | head;
+```
+
+## C++
+
+Write a function in C++, use Rcpp to wrap it and ...
+
+```{Rcpp, eval = requireNamespace("Rcpp", quietly = TRUE)}
+#include <Rcpp.h>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+NumericVector timesTwo(NumericVector x) {
+  return x * 2;
+}
+```
+
+then immediately call your C++ function from R!
+
+```{r, eval = requireNamespace("Rcpp", quietly = TRUE)}
+timesTwo(1:4)
+```
+
+## Standard output and error
+
+Some output that you see in an interactive session is not actually captured by rmarkdown, when that same code is executed in the context of an `.Rmd` document. When `std_out_err` is `TRUE`, `reprex::reprex_render()` uses a feature of `callr:r()` to capture such output and then injects it into the rendered result.
+
+Look for this output in a special section of the rendered document (and notice that it does not appear right here).
+
+```{r}
+system2("echo", args = "Output that would normally be lost")
+```
+
+Nam mollis tristique neque eu luctus. Suspendisse rutrum congue nisi sed convallis. Aenean id neque dolor. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.
+
+# Session info
+
+Теперь можно завершить сессию работы.
+
+<details>
+  <summary><strong>Описание сессии</strong></summary>
+
+```{r The End of Session }
+# The End of Session
+
+devtools::session_info()
+
+Sys.time()
+
+invisible( gc(reset = FALSE, full = TRUE) )
+
+```
+
+</details>
+
+#### {-} {.toc-ignore}
