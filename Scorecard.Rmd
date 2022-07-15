@@ -74,10 +74,15 @@ library('dplyr')            # A Grammar of Data Manipulation
 library('ggplot2')          # Create Elegant Data Visualisations Using the Grammar of Graphics
 library('tibble')           # Simple Data Frames
 library('tidyr')            # Tidy Messy Data 
+library('stringr')          # Simple, Consistent Wrappers for Common String Operations
+library('readr')            # Read Rectangular Text Data
 library('lubridate')        # Dates and times made easy with lubridate
 library('knitr')            # A General-Purpose Package for Dynamic Report Generation in R
 library('magrittr')         # A Forward-Pipe Operator for R
 library('smbinning')        # Scoring Modeling and Optimal Binning
+library('openxlsx')         # Read, Write and Edit xlsx Files
+library('woeBinning')       # Supervised Weight of Evidence Binning of Numeric Variables and Factors
+library('openxlsx')         # Read, Write and Edit xlsx Files 
 
 library('progressr')        # An Inclusive, Unifying API for Progress Updates
 
@@ -179,11 +184,15 @@ Data frame with 30,000 rows and 25 columns.
 load("data/chileancredit.RData")
 load("data/UCI_Credit_Card.Rdata")
 
-DF <- # UCI_Credit_Card
+DF <- # UCI_Credit_Card %>% dplyr::mutate( GB_flag = ifelse(GB_flag == 1, 0, 1) )   # Flag for Optimal Binning
   chileancredit %>%
     dplyr::filter(FlagGB == 1 | FlagGB == 0) %>% 
     dplyr::mutate(period = params$date %m+% months( ceiling(Rnd * 0.6 * 10 - 1) )) %>% 
     dplyr::rename(GB_flag = FlagGB)
+
+Max_Vars   <- 36
+Max_Levels <- 36
+SQLCodeFilename <- 'binning.sql'
 
 ```
 
@@ -241,13 +250,352 @@ split <- list(
   , valid_index = Valid_index
 ) 
 
+# Train Set after Discretization (Binning) of Numeric Variables & Grouping of Factor Levels 
+DF0 <- 
+  DF[split$train_index, ] 
+
+
 remove(Train_index, Valid_index)
 
 ```
 
 Таким образом сформировано три подвыборки, на одной из которых будет проведено обучение, на второй проверка модели, а на третьей, самом последней по времени, её контрольная валидация.
 
-```{r}
+```{r Discretization, warning=FALSE}
+
+isobin <- function(data, y, x) { # Second Variant - Finer Monotonic Binning Based on Isotonic Regression
+# WenSui Liu, is leading a team of quantitative analysts developing operational risk models for American Bank.
+# https://statcompute.wordpress.com/2017/06/15/finer-monotonic-binning-based-on-isotonic-regression/
+  d1 <- data[c(y, x)]
+  d2 <- d1[!is.na(d1[x]), ]
+  c <- cor(d2[, 2], d2[, 1], method = 'spearman', use = 'complete.obs')
+  reg <- isoreg(d2[, 2], c / abs(c) * d2[, 1])
+  k <- knots(as.stepfun(reg))
+  sm1 <- smbinning::smbinning.custom(d1, y, x, k)
+  c1 <- subset(sm1$ivtable, subset = CntGood * CntBad > 0, select = Cutpoint)
+  c2 <- suppressWarnings(as.numeric(unlist(strsplit(c1$Cutpoint, ' '))))
+  c3 <- c2[!is.na(c2)]
+  return(smbinning::smbinning.custom(d1, y, x, c3[-length(c3)]))
+}
+
+tree_bin<- function(data, y, x) {
+# Thilo Eichenberg for `woeBinning` package
+  binning <- woeBinning::woe.tree.binning(df = data, target.var =  y, pred.var =  x,
+                           min.perc.total = 0.05, min.perc.class = 0, stop.limit = 0.01,
+                           abbrev.fact.levels = 200, event.class = 1)
+  
+  if (class(binning) == 'list') {
+    z <- c()
+    
+    if ( class(data[, x]) ==  'factor') {
+      for (variable in binning[[2]]$Group.2 %>% levels()) {
+        df <- binning[[2]]
+        fac_vec <- df[binning[[2]]$Group.2 == variable, 'Group.1'] %>%
+          as.character 
+        chr_vec <- paste0('\'', paste0(fac_vec,  sep = "\'", collapse = ', \''))
+        z <- c(z, chr_vec)
+      }  
+    } else { 
+      df <- binning[[2]]
+      z <- df$cutpoints.final %>%
+        .[c(-1, -nrow(df))] %>%
+          as.vector()
+      } # End of 'Numeric' class
+    } else { # ERROR !!!
+      z <- c()
+  }
+  
+  return( z )
+}
+
+# Convert integer features with unique < 5 into factor for smbinning()
+DF0 <- 
+  DF0 %>% 
+    dplyr::mutate(across( tidyselect:::where( ~ (is.integer(.x) &  length(unique(.x)) < 9 ) ) & !c('GB_flag')
+                        , as.factor ))
+
+# Create MS Excel File for Output
+openxlsx::addWorksheet(wb <- openxlsx::createWorkbook(), sheetName = 'IV Table', 
+                       gridLines = FALSE, tabColour = 'olivedrab')
+openxlsx::addWorksheet(wb, sheetName = 'Scorecard', gridLines = FALSE, tabColour = 'brown')
+
+NamesOfVariables <- DF0 %>%
+  dplyr::select( -dplyr::one_of('GB_flag', 'period', 'Rnd', 'CuScore1', 'CuScore2', 'CuScore3', # Ineligible variables
+                                dplyr::select_if(., ~ is.factor(.) & nlevels(.) == 1) %>%
+                                  colnames, # Levels > 1
+                         # At least 5 different values for Numeric variables
+                dplyr::select_if(., ~ is.numeric(.) & unique(.) %>% length() < 5) %>% colnames)) %>%
+    colnames
+
+binning.df <- cbind(Variable = NamesOfVariables,
+                    `IV-Finish` = rep(NA_real_, times = length(NamesOfVariables)),
+                    data.frame(matrix(data = rep(NA_real_, length(NamesOfVariables) * 8),
+                                      nrow = length(NamesOfVariables), ncol = 8))) %>%
+                      setNames(c('Variable', 'IV', 'IV-RPart', 'N-RPart', 'IV-Decile', 'N-Decile',
+                                 'IV-Iso', 'N-Iso', 'IV-Tree', 'N-Tree'))
+binning.df$Method <- rep(x = '', times = length(NamesOfVariables))
+
+TotalBinning.sql <- ''
+
+for (i in 1:length(NamesOfVariables)) {
+  val <- NamesOfVariables[i]
+  cat(paste(i, '-', val, '\n'))
+
+  if (DF0[, val] %>% is.factor) {  #  Generate a binning table for all the categories of a given factor variable (A factor variable with at least 2 different values. Labels with commas are not allowed)
+    
+    result.smb <- switch(val,
+      `CuWealth`    = smbinning.factor.custom(DF0, x = val, y = 'GB_flag',
+                                              c("'W01','W02'",         # Group 1
+                                                "'W03','W04','W05'",   # Group 2
+                                                "'W06','W07'",         # Group 3
+                                                "'W08','W09','W10'")), # Group 4
+    if (levels(DF0[, val]) %>% length() > Max_Levels) { # Multi levels `factor` variables
+        chr_vec <- tree_bin(DF0, 'GB_flag', val)   # Combine levels of factor variable by Badrate into some bins
+        smbinning.factor.custom(DF0, x = val, y = 'GB_flag', chr_vec)
+      }
+      else {
+        smbinning.factor(DF0, x = val, y = 'GB_flag', maxcat = levels(DF0[, val]) %>% length() + 1)  
+      }
+    )
+
+    if (class(result.smb) == 'list') {
+      binning.df[i, 'IV']       <- result.smb$iv
+      binning.df[i, 'IV-RPart'] <- result.smb$iv
+      binning.df[i, 'N-RPart']  <- result.smb$ivtable %>% nrow - 1 # with Missing Vales
+      binning.df[i, 'Method']   <- ifelse(length(result.smb$groups) == 0, 'IV-By Levels', 'IV-By Groups')[1]
+      
+        # IV Table Supplement
+      result.smb$ivtable <- result.smb$ivtable %>%
+      dplyr::mutate(G_Dis = CntGood / table(DF0$GB_flag)[2],
+           B_Dis = CntBad / table(DF0$GB_flag)[1],
+           `G/B Index` = ifelse(G_Dis > B_Dis, G_Dis / B_Dis, B_Dis / G_Dis),
+           `0=Good, 1=Bad` = ifelse(G_Dis > B_Dis, 0, 1),
+           Bin = c(1:(nrow(result.smb$ivtable) - 1), NA),
+           Min = rep(NA, times = result.smb$ivtable %>% nrow),
+           Max = rep(NA, times = result.smb$ivtable %>% nrow)
+      )
+    }
+
+  } else 
+    {                                                                  # Numeric Class
+    # Optimal Binning for Scoring Modeling from package `smbinning`
+    # This process, also known as supervised discretization, utilizes Recursive Partitioning to categorize the numeric characteristic. The especific algorithm is Conditional Inference Trees which initially excludes missing values (NA) to compute the cutpoints, adding them back later in the process for the calculation of the Information Value.
+    result1.smb <- smbinning(DF0, 'GB_flag', val)
+  
+    if (class(result1.smb) == 'list') {
+      binning.df[i, 'IV-RPart'] <- result1.smb$iv
+      binning.df[i, 'N-RPart']  <- result1.smb$bands %>% length
+    }
+  
+    # Custom Binning Based by cutpoints using percentiles (10% each)
+    if (length(NamesOfVariables) <= Max_Vars || class(result1.smb) != 'list') {
+      cbs1cuts <- as.vector(quantile(DF0[, val], probs=seq(0, 1, 0.1), na.rm=TRUE)) # Quantiles by 10%
+      cbs1cuts <- cbs1cuts[2:(length(cbs1cuts) - 1)] # Remove first (min) and last (max) values
+      result2.smb <- smbinning.custom(df=DF0, y = 'GB_flag', x = val, cuts = cbs1cuts)
+      binning.df[i, 'IV-Decile'] <- result2.smb$iv
+      binning.df[i, 'N-Decile']  <- result2.smb$bands %>% length
+    } else {
+      binning.df[i, 'IV-Decile'] <- 0
+      binning.df[i, 'N-Decile']  <- ncol(DF0) + 1
+    }
+      
+    if (length(NamesOfVariables) <= Max_Vars ) { # & !isMicrosoftRServer
+      # Finer Monotonic Binning Based on Isotonic Regression - Do Not working with Microsoft R Server 9.3.0
+      result3.smb <- isobin(DF0, 'GB_flag', val)
+      binning.df[i, 'IV-Iso'] <- result3.smb$iv
+      binning.df[i, 'N-Iso']  <- result3.smb$bands %>% length
+    
+      # Generates a supervised tree-like segmentation of numeric variables with respect to a binary target outcome
+      # result4.smb <- tree_chimergebin(DF0, 'GB_flag', val)
+      cbs1cuts <- tree_bin(DF0, 'GB_flag', val)   # Binning via Tree-Like Segmentation
+      result4.smb <- smbinning.custom(df = DF0, x = val, y = 'GB_flag', cuts = cbs1cuts)
+      if (class(result4.smb) == 'list') {  
+        binning.df[i, 'IV-Tree'] <- result4.smb$iv
+        binning.df[i, 'N-Tree']  <- result4.smb$bands %>% length
+      } else {  # 'Not Meaningful (IV<0.1)' or 'Uniques values < 5' case
+        binning.df[i, 'IV-Tree'] <- 0
+        binning.df[i, 'N-Tree']  <- ncol(DF0)
+      }
+    } else {
+      binning.df[i, 'IV-Iso'] <- 0
+      binning.df[i, 'N-Iso']  <- ncol(DF0)
+      
+      binning.df[i, 'IV-Bad'] <- 0
+      binning.df[i, 'N-Bad']  <- ncol(DF0)
+    }
+    
+    # Selection of the Optimal Binning Method
+    if (if_else(is.na(binning.df[i, 'IV-RPart']) == TRUE, 0, binning.df[i, 'IV-RPart'] * 1.1) >
+          binning.df[i, 'IV-Decile']) {
+                        binning.df[i, 'Method'] <- 'IV-RPart'
+    } else 
+      {
+      if ( ( (binning.df[i, 'IV-Iso'] > binning.df[i, 'IV-Decile']) & 
+             (binning.df[i, 'N-Iso'] / 1.1 < binning.df[i, 'N-Decile']) ) |
+           ( (binning.df[i, 'IV-Iso'] * 1.1 > binning.df[i, 'IV-Decile']) & 
+             (binning.df[i, 'N-Iso'] * 2 < binning.df[i, 'N-Decile']) ) ) {
+                        binning.df[i, 'Method'] <- 'IV-Iso'
+      } else {
+        if (binning.df[i, 'IV-Decile'] >= binning.df[i, 'IV-Iso']) { 
+                        binning.df[i, 'Method'] <- 'IV-Decile'
+              } else { 
+                  binning.df[i, 'Method'] <- 'IV-Iso' } 
+              }
+      
+      }  # End Else If
+
+    type <- binning.df[i, 'Method']
+    result.smb <- 
+      switch(type,
+             `IV-RPart` = result1.smb,
+             `IV-Decile` = result2.smb,
+             `IV-Iso` = result3.smb,
+             `IV-Bad` = result4.smb
+             )
+    binning.df[i, 'IV'] <- result.smb$iv
+  
+    # IV Table Supplement
+    result.smb$ivtable <- 
+      result.smb$ivtable %>%
+        mutate(G_Dis = CntGood / table(DF0$GB_flag)[2],
+               B_Dis = CntBad / table(DF0$GB_flag)[1],
+               `G/B Index` = if_else(G_Dis > B_Dis, G_Dis / B_Dis, B_Dis / G_Dis),
+               `0=Good, 1=Bad` = if_else(G_Dis > B_Dis, 0, 1),
+               Bin = c(1:(nrow(result.smb$ivtable) - 1), NA),
+               Min = c(NA, result.smb$cuts, NA, NA),
+               Max = c(result.smb$cuts, NA, NA, NA)
+        )
+
+  } #  End else for numeric class 
+  
+  # Prepare MySQL-code for Binning and Fine Classing
+  # Sys.setloc <- Sys.setlocale(locale = 'Russian') # set locale to `Russian`
+  binning.sql <- capture.output(smbinning.sql(result.smb)) %>% 
+    gsub("then '0", "then '", .) %>% 
+      gsub('TableName', 'DF', .) %>%
+        stringr::str_replace('NewCharName', paste0(val, '_fct')) 
+  
+  val_fct <- paste0('  \'', val, '_fct', '\'', '  from data.frame \'DF1\'')
+  binning.sql <- c('select *,', paste0('      /*   Inserting the new factor variable', val_fct, '  */'),
+                    binning.sql[-c(1:3)] , paste0('  \'', val, '_fct', '\'', ' from \'DF1\''))
+
+  # Truncation of the Name of the Gradation in a Complex Set of levels
+  theBest <- TRUE
+  for (j in 1:(nrow(result.smb[['ivtable']]) - 2)) {
+    if (str_length(binning.sql[j + 3]) > 999) {
+      gradation_str <- str_split( string = binning.sql[j + 3], pattern = sprintf('%s: %s ', j, val) ) %>% 
+        unlist
+      binning.sql[j + 3] <- 
+        paste0(gradation_str[1], ifelse( theBest, sprintf('%s: %s the Best\'', j, val), 
+                                          sprintf('%s: %s the Worst\'', j, val) ) )
+      theBest <= FALSE
+    } else {
+      # print('empty')
+    }
+  }
+  
+  # Appending binning.sql into TotalBinning.sql
+  if (i == 1) {
+    binning.sql[length(binning.sql)] = paste0('  \'', val, '_fct\',')
+    TotalBinning.sql <- binning.sql
+  } else {
+    if (i == length(NamesOfVariables)) {
+      TotalBinning.sql <- c(TotalBinning.sql, '', binning.sql[-1] )
+    } else {
+      TotalBinning.sql <- c(TotalBinning.sql, '', binning.sql[-c(1, length(binning.sql))], 
+                            paste0('  \'', val, '_fct\','))
+    }
+  } # End if (i == 1)
+  # TotalBinning.sql <- c(TotalBinning.sql, '', binning.sql)
+  
+  # Preparing a Data.Frame with VI Table for Export into MS Excel
+  openxlsx::addWorksheet(wb, val, gridLines = FALSE, tabColour = ifelse(result.smb$iv >= 0.05, 'chartreuse',
+                                                                   ifelse(result.smb$iv >= 0.03, 'khaki', 'white')))
+  result.smb$ivtable[ is.na( result.smb$ivtable ) ] <- NA  # Dealing with NaN's in data frames
+  N <- 3:(nrow(result.smb$ivtable) + 2)
+  
+  result.smb$ivtable %>% 
+    dplyr::select(Cutpoint, Bin, Min, Max, CntRec, CntGood, CntBad,  G_Dis, B_Dis, Share = PctRec, 
+                  BadRate, WoE, IV,`G/B Index`, `0=Good, 1=Bad`) %>% 
+      writeDataTable(wb, sheet = val, x = ., tableStyle = 'TableStyleMedium2', startCol = 'A',
+                     startRow = 2, tableName = val, firstColumn = TRUE, lastColumn = FALSE, bandedRows = TRUE)
+  # Set Columns widths
+  setColWidths(wb, sheet = val, cols = 1:4, widths = c(32, 7, 10, 10))
+  
+  # # Set Row heights
+  # setRowHeights(wb, sheet = 1, rows = 1, heights = 45)
+  
+  # Set Styles & Conditional Formattings in Columns
+  addStyle(wb, sheet = val, style = createStyle(wrapText = TRUE, halign = 'center', valign = 'center'),
+                                              cols = 1:ncol(result.smb$ivtable), rows = 2)
+  addStyle(wb, sheet = val, cols = 1, rows = 1, style = createStyle(fontSize = 16, textDecoration = 'bold'))
+  addStyle(wb, sheet = val, cols = 1:ncol(result.smb$ivtable), rows = (nrow(result.smb$ivtable) + 2), 
+           style = createStyle(textDecoration = 'bold'))
+  addStyle(wb, sheet = val, cols = 5:7, rows = N, style = createStyle(numFmt = 'COMMA'), gridExpand = TRUE)
+  addStyle(wb, sheet = val, cols = 8:10, rows = N, style = createStyle(numFmt = '0%'), gridExpand = TRUE)
+  addStyle(wb, sheet = val, cols = 11, rows = N, style = createStyle(numFmt = paste0('0', options()$OutDec, '0%'), textDecoration = 'bold'))
+  conditionalFormatting(wb, sheet = val, cols = 13, rows = 3:(nrow(result.smb$ivtable) + 1), type = 'databar',
+                        border = FALSE, style = c('red', 'chartreuse'))
+  addStyle(wb, sheet = val, cols = 4, rows = N, style = createStyle(border = 'right', borderColour = '#4F81BC'))
+  addStyle(wb, sheet = val, cols = 7, rows = N, style = createStyle(numFmt = 'COMMA', border = 'right',
+                                                                    borderColour = '#4F81BC'))
+  addStyle(wb, sheet = val, cols = 10, rows = N, style = createStyle(numFmt = '0%', border = 'right',
+                                                                     borderColour = '#4F81BC'))
+
+  conditionalFormatting(wb, sheet = val, cols = 15, rows = 3:(nrow(result.smb$ivtable) + 1), rule ='$O3=0',
+      style = createStyle(fontColour = 'red', halign = 'center', valign = 'center', textDecoration = 'bold'))
+  conditionalFormatting(wb, sheet = val, cols = 15, rows = 3:(nrow(result.smb$ivtable) + 1), rule ='$O3>0',
+      style = createStyle(fontColour = 'black', halign = 'center', valign = 'center', textDecoration = 'bold'))
+
+  writeData(wb, sheet = val, val, startCol = 'A', startRow = 1)
+  writeData(wb, sheet = val, data.frame(binning.sql), colNames = FALSE, rowNames = FALSE,
+            startCol = 'A', startRow = nrow(result.smb$ivtable) + 4)
+
+  writeFormula(wb, sheet = val, startCol = 'A', 
+               startRow = nrow(result.smb$ivtable) + 5 + length(binning.sql), 
+               x = makeHyperlinkString(sheet = 'IV Table', row = i + 2, col = 1,
+                                       text = 'Link to IV Table'))
+}     # End next i
+
+# # Flag Recovery after Optimal Binning
+# DF0 <- 
+#   DF0 %>% 
+#     dplyr::mutate( GB_flag = ifelse(GB_flag == 1, 0, 1) )
+
+# Write MySQL code for Coarse Classing Selected Variables
+readr::write_lines(x = TotalBinning.sql, path = paste0('queries/', SQLCodeFilename), na = "NA", append = FALSE)
+
+N <- 3:(nrow(binning.df) + 2)
+# writeDataTable(wb, sheet = 'IV Table', x = binning.df, tableStyle = 'TableStyleMedium4', startCol = 'A',
+#               startRow = 2, tableName = 'IVTable', firstColumn = FALSE, lastColumn = TRUE, bandedRows = TRUE)
+
+# Set Columns widths
+setColWidths(wb, sheet = 'IV Table', cols = 1:2, widths = c(15, 12))
+setColWidths(wb, sheet = 'IV Table', cols = 11, widths = c(12))
+
+conditionalFormatting(wb, sheet = 'IV Table', cols = 2, rows = N, type = 'databar',
+                      border = FALSE, style = c('red', 'royalblue'))
+addStyle(wb, sheet = 'IV Table', cols = 2, rows = N, 
+         style = createStyle(border = 'right', borderColour = '#9CB95C'))
+addStyle(wb, sheet = 'IV Table', cols = 10, rows = N, 
+         style = createStyle(border = 'right', borderColour = '#9CB95C'))
+
+writeData(wb, sheet = 'IV Table', 'IV Table', startCol = 'A', startRow = 1)
+addStyle(wb, sheet = 'IV Table', cols = 1, rows = 1, 
+         style = createStyle(fontSize = 16, textDecoration = 'bold'))
+
+for (i in 1:nrow(binning.df)) {
+  ## Internal - Text to display
+  val = binning.df[i, 'Variable']
+  writeFormula(wb, sheet = 'IV Table', startCol = 'A', startRow = i + 2, 
+    x = makeHyperlinkString(sheet = val, row = 1, col = 1, text = val))
+}
+
+# # Open MS Excel
+# openXL(wb)
+
+remove(NamesOfVariables, result1.smb, result2.smb, result3.smb, result4.smb, result.smb, chr_vec, # binning.df,
+      j, TotalBinning.sql, theBest, binning.sql, val, val_fct, i, type, cbs1cuts, N)
 
 ```
 
